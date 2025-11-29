@@ -177,8 +177,9 @@
         <header>
             <h1>Generative AI Model Evaluator</h1>
             <p class="subtitle">Compare responses across different models using Prompt Management</p>
-            <div style="margin-top: 15px;">
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
                 <a href="/models" style="color: white; text-decoration: none; padding: 8px 16px; background: rgba(255,255,255,0.2); border-radius: 4px;">📋 View All Models</a>
+                <a href="/evaluations" style="color: white; text-decoration: none; padding: 8px 16px; background: rgba(255,255,255,0.2); border-radius: 4px;">📊 Output Evaluations</a>
             </div>
         </header>
         
@@ -188,10 +189,14 @@
             <div class="section">
                 <h2>1. Select Prompt</h2>
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                    <select id="promptSelect" style="flex: 1; margin-bottom: 0;">
+                    <select id="promptSelect" style="flex: 1; margin-bottom: 0;" onchange="displayPromptText()">
                         <option value="">Loading prompts...</option>
                     </select>
                     <button onclick="showCreatePrompt()" style="padding: 12px 20px; white-space: nowrap;">+ Create New</button>
+                </div>
+                <div id="promptTextDisplay" style="display: none; margin-top: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">Prompt Text:</label>
+                    <textarea id="promptTextReadonly" readonly rows="6" style="background: #f8f9fa; cursor: default; resize: vertical;"></textarea>
                 </div>
             </div>
             
@@ -251,6 +256,7 @@
         let prompts = [];
         let models = [];
         let variableCount = 0;
+        let currentResults = null;
 
         function showCreatePrompt() {
             document.getElementById('createPromptSection').style.display = 'block';
@@ -395,6 +401,43 @@
             }
         }
 
+        async function displayPromptText() {
+            const promptId = document.getElementById('promptSelect').value;
+            const displayDiv = document.getElementById('promptTextDisplay');
+            const textArea = document.getElementById('promptTextReadonly');
+            
+            if (!promptId) {
+                displayDiv.style.display = 'none';
+                textArea.value = '';
+                return;
+            }
+            
+            // Show loading state
+            textArea.value = 'Loading prompt text...';
+            displayDiv.style.display = 'block';
+            
+            try {
+                // Fetch full prompt details
+                const response = await fetch(`/api/prompts/${promptId}`);
+                const data = await response.json();
+                
+                if (data.success && data.prompt) {
+                    const variants = data.prompt.variants || [];
+                    if (variants.length > 0) {
+                        const promptText = variants[0].templateConfiguration?.text?.text || 'No prompt text available';
+                        textArea.value = promptText;
+                    } else {
+                        textArea.value = 'No prompt text available';
+                    }
+                } else {
+                    textArea.value = 'Error loading prompt text';
+                }
+            } catch (error) {
+                console.error('Error fetching prompt:', error);
+                textArea.value = 'Error loading prompt text';
+            }
+        }
+
         async function loadPrompts() {
             try {
                 const response = await fetch('/api/prompts');
@@ -505,17 +548,40 @@
                 console.log('Response data:', data);
                 
                 if (data.success) {
+                    currentResults = data.results;
                     displayResults(data.results);
                 } else {
                     resultsContainer.innerHTML = `<div class="section error">Error: ${data.error}</div>`;
+                    currentResults = null;
                 }
             } catch (error) {
                 console.error('Evaluation error:', error);
                 resultsContainer.innerHTML = `<div class="section error">Error: ${error.message}</div>`;
+                currentResults = null;
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Evaluate Models';
             }
+        }
+
+        function sendToEvaluations() {
+            if (!currentResults || currentResults.length === 0) {
+                alert('No results to send. Please evaluate models first.');
+                return;
+            }
+
+            // Get the prompt text from the readonly textarea
+            const promptText = document.getElementById('promptTextReadonly').value || '';
+            
+            // Store results and prompt text in sessionStorage
+            const dataToSend = {
+                results: currentResults,
+                promptText: promptText
+            };
+            sessionStorage.setItem('evaluationResults', JSON.stringify(dataToSend));
+            
+            // Navigate to evaluations page
+            window.location.href = '/evaluations';
         }
 
         function showSuccessMessage(message) {
@@ -529,7 +595,17 @@
 
         function displayResults(results) {
             const container = document.getElementById('resultsContainer');
-            container.innerHTML = '<div class="section"><h2>Results</h2><div class="results" id="results"></div></div>';
+            container.innerHTML = `
+                <div class="section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin-bottom: 0;">Results</h2>
+                        <button onclick="sendToEvaluations()" style="background: #28a745; padding: 12px 24px;">
+                            Send to Evaluations →
+                        </button>
+                    </div>
+                    <div class="results" id="results"></div>
+                </div>
+            `;
             const resultsDiv = document.getElementById('results');
 
             results.forEach(result => {

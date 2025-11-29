@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Output Evaluations</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        h1 { font-size: 2em; margin-bottom: 10px; }
+        .subtitle { opacity: 0.9; font-size: 1.1em; }
+        .nav {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .nav a {
+            color: #667eea;
+            text-decoration: none;
+            margin-right: 20px;
+            font-weight: 600;
+        }
+        .nav a:hover { text-decoration: underline; }
+        .content { padding: 30px; }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .tab {
+            padding: 12px 24px;
+            background: #f8f9fa;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        textarea, input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-family: inherit;
+        }
+        textarea:focus, input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: translateY(-2px); }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .metric-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .metric-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .metric-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+        .score-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .score-high { background: #d4edda; color: #155724; }
+        .score-medium { background: #fff3cd; color: #856404; }
+        .score-low { background: #f8d7da; color: #721c24; }
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .checkbox-label input { width: auto; margin: 0 8px 0 0; }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .comparison-table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        .comparison-table tr:hover {
+            background: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Model Output Evaluations</h1>
+            <p class="subtitle">Analyze and compare model responses with operational metrics</p>
+        </header>
+        
+        <div class="nav">
+            <a href="/">← Back to Evaluator</a>
+            <a href="/models">View Models</a>
+        </div>
+        
+        <div class="content">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('single', this)">Single Response</button>
+                <button class="tab" onclick="switchTab('judge', this)">AI Judge</button>
+                <button class="tab" onclick="switchTab('compare', this)">Compare Responses</button>
+            </div>
+            
+            <!-- Single Response Evaluation -->
+            <div id="single-tab" class="tab-content active">
+                <div class="section">
+                    <h2>Evaluate Single Response</h2>
+                    <textarea id="singleResponse" rows="8" placeholder="Paste the model response you want to evaluate..."></textarea>
+                    
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600;">Select Metrics:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" class="metric-check" value="length" checked> Length Analysis
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" class="metric-check" value="readability" checked> Readability
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" class="metric-check" value="toxicity" checked> Toxicity
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" class="metric-check" value="coherence" checked> Coherence
+                        </label>
+                    </div>
+                    
+                    <button onclick="evaluateSingle()">Evaluate Response</button>
+                </div>
+                
+                <div id="singleResults"></div>
+            </div>
+            
+            <!-- AI Judge Evaluation -->
+            <div id="judge-tab" class="tab-content">
+                <div class="section">
+                    <h2>AI Judge Evaluation</h2>
+                    <p style="margin-bottom: 15px; color: #666;">Use a Bedrock model to evaluate response quality</p>
+                    
+                    <textarea id="judgeResponse" rows="8" placeholder="Paste the response to evaluate..."></textarea>
+                    
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Evaluation Criteria:</label>
+                    <input type="text" id="judgeCriteria" placeholder="e.g., accuracy, helpfulness, clarity" value="overall quality">
+                    
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Judge Model:</label>
+                    <select id="judgeModel">
+                        <option value="us.anthropic.claude-3-haiku-20240307-v1:0">Claude 3 Haiku</option>
+                        <option value="us.anthropic.claude-3-5-sonnet-20241022-v2:0">Claude 3.5 Sonnet</option>
+                    </select>
+                    
+                    <button onclick="evaluateWithJudge()">Evaluate with AI Judge</button>
+                </div>
+                
+                <div id="judgeResults"></div>
+            </div>
+            
+            <!-- Compare Responses -->
+            <div id="compare-tab" class="tab-content">
+                <div class="section">
+                    <h2>Compare Multiple Responses</h2>
+                    <p style="margin-bottom: 15px; color: #666;">Compare responses from different models</p>
+                    
+                    <div id="importedDataNotice" style="display: none; background: #d4edda; border: 2px solid #28a745; color: #155724; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                        ✓ Loaded evaluation results from main page
+                    </div>
+                    
+                    <div id="promptTextDisplay" style="display: none; background: #f8f9fa; border: 2px solid #667eea; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                        <h3 style="color: #667eea; margin-bottom: 10px; font-size: 1.1em;">📝 Prompt Used:</h3>
+                        <div id="promptTextContent" style="background: white; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; font-size: 14px; line-height: 1.6; max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                    
+                    <div id="responseInputs">
+                        <div class="response-input" data-index="0">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Model 1:</label>
+                            <input type="text" class="model-name" placeholder="Model name" value="Model A">
+                            <textarea class="response-text" rows="4" placeholder="Response from Model 1..."></textarea>
+                        </div>
+                        
+                        <div class="response-input" data-index="1">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Model 2:</label>
+                            <input type="text" class="model-name" placeholder="Model name" value="Model B">
+                            <textarea class="response-text" rows="4" placeholder="Response from Model 2..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <button onclick="addResponseInput()" style="background: #28a745; margin-right: 10px;">+ Add Response</button>
+                    <button onclick="compareResponses()">Compare All</button>
+                </div>
+                
+                <div id="compareResults"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let responseCount = 2;
+
+        // Check for imported results on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            const storedData = sessionStorage.getItem('evaluationResults');
+            if (storedData) {
+                try {
+                    const data = JSON.parse(storedData);
+                    // Handle both old format (array) and new format (object with results and promptText)
+                    if (Array.isArray(data)) {
+                        loadImportedResults(data, '');
+                    } else {
+                        loadImportedResults(data.results || [], data.promptText || '');
+                    }
+                    // Clear the stored data after loading
+                    sessionStorage.removeItem('evaluationResults');
+                } catch (e) {
+                    console.error('Error loading imported results:', e);
+                }
+            }
+        });
+
+        // Store imported results with usage data
+        let importedResultsData = [];
+
+        function loadImportedResults(results, promptText) {
+            // Switch to compare tab
+            switchTab('compare');
+            
+            // Show notice
+            document.getElementById('importedDataNotice').style.display = 'block';
+            
+            // Display prompt text if available
+            if (promptText && promptText.trim()) {
+                document.getElementById('promptTextContent').textContent = promptText;
+                document.getElementById('promptTextDisplay').style.display = 'block';
+            } else {
+                document.getElementById('promptTextDisplay').style.display = 'none';
+            }
+            
+            // Store the full results data including usage
+            importedResultsData = results;
+            
+            // Clear existing inputs
+            const container = document.getElementById('responseInputs');
+            container.innerHTML = '';
+            
+            // Add response inputs for each result
+            results.forEach((result, index) => {
+                const modelName = result.model_id || `Model ${index + 1}`;
+                const responseText = result.response || result.error || '';
+                
+                const div = document.createElement('div');
+                div.className = 'response-input';
+                div.setAttribute('data-index', index);
+                div.innerHTML = `
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Model ${index + 1}:</label>
+                    <input type="text" class="model-name" placeholder="Model name" value="${modelName}">
+                    <textarea class="response-text" rows="4" placeholder="Response from Model ${index + 1}...">${responseText}</textarea>
+                `;
+                container.appendChild(div);
+            });
+            
+            responseCount = results.length;
+            
+            // Auto-compare if we have results
+            if (results.length >= 2) {
+                setTimeout(() => compareResponses(), 500);
+            }
+        }
+
+        function switchTab(tabName, clickedButton) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            if (clickedButton) {
+                clickedButton.classList.add('active');
+            } else {
+                // Find and activate the correct tab button by matching the tab name
+                const tabButtons = document.querySelectorAll('.tab');
+                const tabMap = { 'single': 0, 'judge': 1, 'compare': 2 };
+                if (tabMap[tabName] !== undefined) {
+                    tabButtons[tabMap[tabName]].classList.add('active');
+                }
+            }
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        async function evaluateSingle() {
+            const responseText = document.getElementById('singleResponse').value.trim();
+            
+            if (!responseText) {
+                alert('Please enter a response to evaluate');
+                return;
+            }
+
+            const metrics = Array.from(document.querySelectorAll('.metric-check:checked'))
+                .map(cb => cb.value);
+
+            const resultsDiv = document.getElementById('singleResults');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Evaluating...</div>';
+
+            try {
+                const response = await fetch('/api/evaluate-response', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        response_text: responseText,
+                        metrics: metrics
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displaySingleResults(data.results);
+                } else {
+                    resultsDiv.innerHTML = `<div class="metric-card"><p style="color: #e74c3c;">Error: ${data.error}</p></div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="metric-card"><p style="color: #e74c3c;">Error: ${error.message}</p></div>`;
+            }
+        }
+
+        function displaySingleResults(results) {
+            const resultsDiv = document.getElementById('singleResults');
+            let html = '';
+
+            if (results.length) {
+                html += '<div class="metric-card">';
+                html += '<h3>📏 Length Analysis</h3>';
+                html += '<div class="metric-grid">';
+                html += `<div class="metric-item"><div class="metric-label">Words</div><div class="metric-value">${results.length.word_count}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Characters</div><div class="metric-value">${results.length.character_count}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Sentences</div><div class="metric-value">${results.length.sentence_count}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Avg Word Length</div><div class="metric-value">${results.length.avg_word_length.toFixed(1)}</div></div>`;
+                html += '</div></div>';
+            }
+
+            if (results.readability) {
+                const score = results.readability.flesch_reading_ease;
+                const badge = score >= 60 ? 'score-high' : score >= 30 ? 'score-medium' : 'score-low';
+                html += '<div class="metric-card">';
+                html += `<h3>📖 Readability <span class="score-badge ${badge}">${results.readability.interpretation}</span></h3>`;
+                html += '<div class="metric-grid">';
+                html += `<div class="metric-item"><div class="metric-label">Flesch Score</div><div class="metric-value">${score}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Grade Level</div><div class="metric-value">${results.readability.grade_level}</div></div>`;
+                html += '</div></div>';
+            }
+
+            if (results.toxicity) {
+                const badge = results.toxicity.severity === 'low' ? 'score-high' : results.toxicity.severity === 'medium' ? 'score-medium' : 'score-low';
+                html += '<div class="metric-card">';
+                html += `<h3>⚠️ Toxicity <span class="score-badge ${badge}">${results.toxicity.severity.toUpperCase()}</span></h3>`;
+                html += '<div class="metric-grid">';
+                html += `<div class="metric-item"><div class="metric-label">Score</div><div class="metric-value">${results.toxicity.toxicity_score}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Keywords Found</div><div class="metric-value">${results.toxicity.toxic_keywords_found}</div></div>`;
+                html += '</div></div>';
+            }
+
+            if (results.coherence) {
+                const badge = results.coherence.quality === 'high' ? 'score-high' : results.coherence.quality === 'medium' ? 'score-medium' : 'score-low';
+                html += '<div class="metric-card">';
+                html += `<h3>🔗 Coherence <span class="score-badge ${badge}">${results.coherence.quality.toUpperCase()}</span></h3>`;
+                html += '<div class="metric-grid">';
+                html += `<div class="metric-item"><div class="metric-label">Score</div><div class="metric-value">${results.coherence.coherence_score}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Transitions</div><div class="metric-value">${results.coherence.transition_words_found}</div></div>`;
+                html += '</div></div>';
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        async function evaluateWithJudge() {
+            const responseText = document.getElementById('judgeResponse').value.trim();
+            const criteria = document.getElementById('judgeCriteria').value.trim();
+            const judgeModel = document.getElementById('judgeModel').value;
+
+            if (!responseText) {
+                alert('Please enter a response to evaluate');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('judgeResults');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>AI Judge is evaluating...</div>';
+
+            try {
+                const response = await fetch('/api/evaluate-with-judge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        response_text: responseText,
+                        criteria: criteria,
+                        judge_model: judgeModel
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success && data.evaluation) {
+                    displayJudgeResults(data.evaluation);
+                } else {
+                    resultsDiv.innerHTML = `<div class="metric-card"><h3>Raw Response</h3><pre>${data.raw_response || data.error}</pre></div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="metric-card"><p style="color: #e74c3c;">Error: ${error.message}</p></div>`;
+            }
+        }
+
+        function displayJudgeResults(evaluation) {
+            const resultsDiv = document.getElementById('judgeResults');
+            const score = evaluation.score || 0;
+            const badge = score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low';
+            
+            let html = '<div class="metric-card">';
+            html += `<h3>🤖 AI Judge Evaluation <span class="score-badge ${badge}">Score: ${score}/10</span></h3>`;
+            
+            if (evaluation.reasoning) {
+                html += `<p style="margin: 15px 0;"><strong>Reasoning:</strong> ${evaluation.reasoning}</p>`;
+            }
+            
+            if (evaluation.strengths && evaluation.strengths.length > 0) {
+                html += '<h4 style="color: #28a745; margin-top: 15px;">✓ Strengths:</h4><ul>';
+                evaluation.strengths.forEach(s => html += `<li>${s}</li>`);
+                html += '</ul>';
+            }
+            
+            if (evaluation.weaknesses && evaluation.weaknesses.length > 0) {
+                html += '<h4 style="color: #dc3545; margin-top: 15px;">✗ Weaknesses:</h4><ul>';
+                evaluation.weaknesses.forEach(w => html += `<li>${w}</li>`);
+                html += '</ul>';
+            }
+            
+            if (evaluation.suggestions && evaluation.suggestions.length > 0) {
+                html += '<h4 style="color: #667eea; margin-top: 15px;">💡 Suggestions:</h4><ul>';
+                evaluation.suggestions.forEach(s => html += `<li>${s}</li>`);
+                html += '</ul>';
+            }
+            
+            html += '</div>';
+            resultsDiv.innerHTML = html;
+        }
+
+        function addResponseInput() {
+            const container = document.getElementById('responseInputs');
+            const div = document.createElement('div');
+            div.className = 'response-input';
+            div.setAttribute('data-index', responseCount);
+            div.innerHTML = `
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Model ${responseCount + 1}:</label>
+                <input type="text" class="model-name" placeholder="Model name" value="Model ${String.fromCharCode(65 + responseCount)}">
+                <textarea class="response-text" rows="4" placeholder="Response from Model ${responseCount + 1}..."></textarea>
+            `;
+            container.appendChild(div);
+            responseCount++;
+        }
+
+        async function compareResponses() {
+            const inputs = document.querySelectorAll('.response-input');
+            const responses = [];
+
+            inputs.forEach((input, index) => {
+                const modelName = input.querySelector('.model-name').value.trim();
+                const responseText = input.querySelector('.response-text').value.trim();
+                
+                if (modelName && responseText) {
+                    const responseData = {
+                        model_id: modelName,
+                        response: responseText
+                    };
+                    
+                    // Add usage data if available from imported results
+                    if (importedResultsData[index] && importedResultsData[index].usage) {
+                        responseData.usage = importedResultsData[index].usage;
+                    }
+                    
+                    responses.push(responseData);
+                }
+            });
+
+            if (responses.length < 2) {
+                alert('Please enter at least 2 responses to compare');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('compareResults');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Comparing responses...</div>';
+
+            try {
+                const response = await fetch('/api/compare-responses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        responses: responses,
+                        metrics: ['length', 'readability', 'coherence']
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayComparisonResults(data.results);
+                } else {
+                    resultsDiv.innerHTML = `<div class="metric-card"><p style="color: #e74c3c;">Error: ${data.error}</p></div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="metric-card"><p style="color: #e74c3c;">Error: ${error.message}</p></div>`;
+            }
+        }
+
+        function displayComparisonResults(results) {
+            const resultsDiv = document.getElementById('compareResults');
+            let html = '<div class="metric-card"><h3>Comparison Results</h3>';
+            
+            // Summary
+            if (results.summary) {
+                html += '<div class="metric-grid">';
+                html += `<div class="metric-item"><div class="metric-label">Responses</div><div class="metric-value">${results.summary.total_responses}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Avg Words</div><div class="metric-value">${Math.round(results.summary.avg_word_count)}</div></div>`;
+                html += `<div class="metric-item"><div class="metric-label">Avg Readability</div><div class="metric-value">${Math.round(results.summary.avg_readability)}</div></div>`;
+                html += '</div>';
+            }
+            
+            // Cost Analysis
+            if (results.individual_results) {
+                const costsAvailable = results.individual_results.some(r => r.cost && !r.cost.error);
+                
+                if (costsAvailable) {
+                    html += '<h4 style="margin-top: 20px;">Cost Analysis</h4>';
+                    html += '<table class="comparison-table"><thead><tr><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Input Cost</th><th>Output Cost</th><th>Total Cost</th></tr></thead><tbody>';
+                    
+                    let totalCostSum = 0;
+                    results.individual_results.forEach(result => {
+                        if (result.cost && !result.cost.error) {
+                            const cost = result.cost;
+                            html += '<tr>';
+                            html += `<td>${result.model_id}</td>`;
+                            html += `<td>${cost.input_tokens || 0}</td>`;
+                            html += `<td>${cost.output_tokens || 0}</td>`;
+                            html += `<td>${cost.input_cost_usd || '$0.00000000'}</td>`;
+                            html += `<td>${cost.output_cost_usd || '$0.00000000'}</td>`;
+                            html += `<td><strong>${cost.total_cost_usd || '$0.00000000'}</strong></td>`;
+                            html += '</tr>';
+                            
+                            // Extract numeric value for sum
+                            const totalCostStr = cost.total_cost_usd || '$0.00000000';
+                            const totalCostNum = parseFloat(totalCostStr.replace('$', ''));
+                            totalCostSum += totalCostNum;
+                        }
+                    });
+                    
+                    // Add total row
+                    //DEVELOPERNOTES: THIS IS NOT NEEDED AND IS OF NO VALUE
+                    //html += '<tr style="background: #f8f9fa; font-weight: bold;">';
+                    //html += '<td colspan="5" style="text-align: right;">Total Cost:</td>';
+                    //html += `<td><strong>$${totalCostSum.toFixed(8)}</strong></td>`;
+                    //html += '</tr>';
+                    
+                    html += '</tbody></table>';
+                }
+            }
+            
+            // Rankings
+            if (results.rankings) {
+                html += '<h4 style="margin-top: 20px;">Rankings</h4>';
+                html += '<table class="comparison-table"><thead><tr><th>Metric</th><th>1st Place</th><th>2nd Place</th><th>3rd Place</th></tr></thead><tbody>';
+                
+                if (results.rankings.most_readable) {
+                    html += '<tr><td>Most Readable</td>';
+                    results.rankings.most_readable.slice(0, 3).forEach(model => {
+                        html += `<td>${model}</td>`;
+                    });
+                    html += '</tr>';
+                }
+                
+                if (results.rankings.most_coherent) {
+                    html += '<tr><td>Most Coherent</td>';
+                    results.rankings.most_coherent.slice(0, 3).forEach(model => {
+                        html += `<td>${model}</td>`;
+                    });
+                    html += '</tr>';
+                }
+                
+                if (results.rankings.longest_response) {
+                    html += '<tr><td>Longest Response</td>';
+                    results.rankings.longest_response.slice(0, 3).forEach(model => {
+                        html += `<td>${model}</td>`;
+                    });
+                    html += '</tr>';
+                }
+                
+                html += '</tbody></table>';
+            }
+            
+            html += '</div>';
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

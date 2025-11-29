@@ -9,6 +9,13 @@ A Python web application for evaluating and comparing different Amazon Bedrock m
 - **Dynamically loads all enabled models** from your AWS account
 - Compare responses across multiple Bedrock models
 - Support for prompt variables with auto-detection
+- **Output Evaluations** - Analyze model responses with operational metrics:
+  - Length analysis (word count, character count, sentence count)
+  - Readability scoring (Flesch Reading Ease)
+  - Toxicity detection
+  - Coherence analysis
+  - AI Judge evaluation using Bedrock models
+  - Side-by-side response comparison
 - Clean, responsive UI
 - Real-time model evaluation
 
@@ -59,6 +66,25 @@ python app.py
 2. (Optional) Add variables in JSON format if your prompt uses them
 3. Select one or more models to compare (all enabled models in your account are shown)
 4. Click "Evaluate Models" to see responses from each model
+
+### Output Evaluations
+
+Navigate to the "Output Evaluations" page to analyze model responses:
+
+**Single Response Analysis:**
+- Paste any model response
+- Select metrics: length, readability, toxicity, coherence
+- Get detailed operational metrics
+
+**AI Judge Evaluation:**
+- Use a Bedrock model to evaluate response quality
+- Specify evaluation criteria (accuracy, helpfulness, etc.)
+- Receive structured feedback with scores, strengths, weaknesses, and suggestions
+
+**Compare Responses:**
+- Add multiple model responses
+- Compare side-by-side with rankings
+- Identify best performing models for your use case
 
 ## Project Structure
 
