@@ -119,6 +119,48 @@ def build_model_pricing() -> Dict[str, Dict[str, float]]:
 MODEL_PRICING = build_model_pricing()
 
 
+def calculate_model_cost(model_id: str, input_tokens: int, output_tokens: int, pricing_dict: Dict[str, Dict[str, float]] = None) -> Dict[str, Any]:
+    """
+    Calculate the cost of a model invocation based on token usage.
+    
+    Args:
+        model_id: The model identifier
+        input_tokens: Number of input tokens
+        output_tokens: Number of output tokens
+        pricing_dict: Optional pricing dictionary (defaults to MODEL_PRICING)
+    
+    Returns:
+        Dictionary with cost breakdown including input_tokens, output_tokens, 
+        input_cost_usd, output_cost_usd, and total_cost_usd
+    """
+    if pricing_dict is None:
+        pricing_dict = MODEL_PRICING
+    
+    print(f"Calculating cost for model: {model_id}, input: {input_tokens}, output: {output_tokens}")
+    
+    if model_id not in pricing_dict:
+        print(f"WARNING: Pricing not available for {model_id}")
+        return {"error": f"Pricing not available for {model_id}"}
+    
+    pricing = pricing_dict[model_id]
+    input_cost = (input_tokens / 1000) * pricing["input"]
+    output_cost = (output_tokens / 1000) * pricing["output"]
+    total_cost = input_cost + output_cost
+    
+    print(f"Calculated costs - Input: ${input_cost:.8f}, Output: ${output_cost:.8f}, Total: ${total_cost:.8f}")
+    
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "input_cost_usd": f"${input_cost:.8f}",
+        "output_cost_usd": f"${output_cost:.8f}",
+        "total_cost_usd": f"${total_cost:.8f}",
+        "input_cost_raw": input_cost,
+        "output_cost_raw": output_cost,
+        "total_cost_raw": total_cost
+    }
+
+
 class EvaluationService:
     """Service for evaluating model outputs using operational metrics"""
     
@@ -128,48 +170,36 @@ class EvaluationService:
         self.cloudwatch = boto3.client('cloudwatch', region_name=region)
     
     def _evaluate_cost(self, model_id: str, input_tokens: int, output_tokens: int) -> Dict:
-        """Calculate the cost of a model invocation based on token usage."""
-        print(f"Calculating cost for model: {model_id}, input: {input_tokens}, output: {output_tokens}")
-        print(f"Available models in pricing: {list(MODEL_PRICING.keys())[:5]}...")
+        """
+        Calculate the cost of a model invocation and publish to CloudWatch.
         
-        if model_id not in MODEL_PRICING:
-            print(f"WARNING: Pricing not available for {model_id}")
-            return {"error": f"Pricing not available for {model_id}"}
+        This is a wrapper around calculate_model_cost that also publishes metrics.
+        """
+        cost_data = calculate_model_cost(model_id, input_tokens, output_tokens)
         
-        pricing = MODEL_PRICING[model_id]
-        input_cost = (input_tokens / 1000) * pricing["input"]
-        output_cost = (output_tokens / 1000) * pricing["output"]
-        total_cost = input_cost + output_cost
+        # Publish to CloudWatch if cost calculation was successful
+        if "error" not in cost_data:
+            try:
+                self.cloudwatch.put_metric_data(
+                    Namespace='llm_custom_operational_metrics',
+                    MetricData=[
+                        {
+                            'MetricName': 'TotalCost',
+                            'Value': cost_data['total_cost_raw'],
+                            'Dimensions': [
+                                {
+                                    'Name': 'Model',
+                                    'Value': model_id
+                                }
+                            ]
+                        }
+                    ]
+                )
+                print("Custom metric published to CloudWatch")
+            except Exception as e:
+                print(f"Error publishing CloudWatch metric: {e}")
         
-        print(f"Calculated costs - Input: ${input_cost:.8f}, Output: ${output_cost:.8f}, Total: ${total_cost:.8f}")
-        
-        try:
-            response = self.cloudwatch.put_metric_data(
-                Namespace='llm_custom_operational_metrics',  # A logical container for your metrics
-                MetricData=[
-                    {
-                        'MetricName': 'TotalCost',  # The name of your custom metric
-                        'Value': total_cost,  # The value of the metric
-                        'Dimensions': [  # Optional: Add dimensions for more granular analysis
-                            {
-                                'Name': 'Model',
-                                'Value': model_id
-                            }
-                        ]
-                    }
-                ]
-            )
-            print("Custom metric published")
-        except Exception as e:
-            print(f"Error publishing CloudWatch metric: {e}")
-        
-        return {
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "input_cost_usd": f"${input_cost:.8f}",
-            "output_cost_usd": f"${output_cost:.8f}",
-            "total_cost_usd": f"${total_cost:.8f}"
-        }
+        return cost_data
     
     def evaluate_response(
         self,
@@ -462,9 +492,11 @@ Provide your evaluation in the following JSON format:
             metrics: Metrics to use for comparison
         
         Returns:
-            Comparison results including cost analysis
+            Comparison results including cost analysis for all models
         """
         results = []
+        total_cost = 0.0
+        models_with_cost = 0
         
         for resp in responses:
             model_id = resp.get('model_id', 'unknown')
@@ -483,18 +515,33 @@ Provide your evaluation in the following JSON format:
                 if input_tokens > 0 or output_tokens > 0:
                     cost_data = self._evaluate_cost(model_id, input_tokens, output_tokens)
                     evaluation['cost'] = cost_data
+                    
+                    # Track total cost if calculation was successful
+                    if 'error' not in cost_data and 'total_cost_raw' in cost_data:
+                        total_cost += cost_data['total_cost_raw']
+                        models_with_cost += 1
                 else:
                     print(f"No token usage data for {model_id}: {usage}")
+                    evaluation['cost'] = {"error": "No token usage data available"}
+            else:
+                print(f"No usage data provided for {model_id}")
+                evaluation['cost'] = {"error": "No usage data provided"}
             
             results.append(evaluation)
         
         # Calculate rankings
         rankings = self._calculate_rankings(results)
         
+        # Generate summary with cost information
+        summary = self._generate_comparison_summary(results)
+        if models_with_cost > 0:
+            summary['total_cost'] = f"${total_cost:.8f}"
+            summary['models_with_cost'] = models_with_cost
+        
         return {
             'individual_results': results,
             'rankings': rankings,
-            'summary': self._generate_comparison_summary(results)
+            'summary': summary
         }
     
     def _calculate_rankings(self, results: List[Dict]) -> Dict[str, List[str]]:

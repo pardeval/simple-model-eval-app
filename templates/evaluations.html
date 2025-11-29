@@ -456,7 +456,7 @@
                 const score = results.readability.flesch_reading_ease;
                 const badge = score >= 60 ? 'score-high' : score >= 30 ? 'score-medium' : 'score-low';
                 html += '<div class="metric-card">';
-                html += `<h3>📖 Readability <span class="score-badge ${badge}">${results.readability.interpretation}</span></h3>`;
+                html += `<h3>Readability <span class="score-badge ${badge}">${results.readability.interpretation}</span></h3>`;
                 html += '<div class="metric-grid">';
                 html += `<div class="metric-item"><div class="metric-label">Flesch Score</div><div class="metric-value">${score}</div></div>`;
                 html += `<div class="metric-item"><div class="metric-label">Grade Level</div><div class="metric-value">${results.readability.grade_level}</div></div>`;
@@ -466,7 +466,7 @@
             if (results.toxicity) {
                 const badge = results.toxicity.severity === 'low' ? 'score-high' : results.toxicity.severity === 'medium' ? 'score-medium' : 'score-low';
                 html += '<div class="metric-card">';
-                html += `<h3>⚠️ Toxicity <span class="score-badge ${badge}">${results.toxicity.severity.toUpperCase()}</span></h3>`;
+                html += `<h3>Toxicity <span class="score-badge ${badge}">${results.toxicity.severity.toUpperCase()}</span></h3>`;
                 html += '<div class="metric-grid">';
                 html += `<div class="metric-item"><div class="metric-label">Score</div><div class="metric-value">${results.toxicity.toxicity_score}</div></div>`;
                 html += `<div class="metric-item"><div class="metric-label">Keywords Found</div><div class="metric-value">${results.toxicity.toxic_keywords_found}</div></div>`;
@@ -476,7 +476,7 @@
             if (results.coherence) {
                 const badge = results.coherence.quality === 'high' ? 'score-high' : results.coherence.quality === 'medium' ? 'score-medium' : 'score-low';
                 html += '<div class="metric-card">';
-                html += `<h3>🔗 Coherence <span class="score-badge ${badge}">${results.coherence.quality.toUpperCase()}</span></h3>`;
+                html += `<h3>Coherence <span class="score-badge ${badge}">${results.coherence.quality.toUpperCase()}</span></h3>`;
                 html += '<div class="metric-grid">';
                 html += `<div class="metric-item"><div class="metric-label">Score</div><div class="metric-value">${results.coherence.coherence_score}</div></div>`;
                 html += `<div class="metric-item"><div class="metric-label">Transitions</div><div class="metric-value">${results.coherence.transition_words_found}</div></div>`;
@@ -528,7 +528,7 @@
             const badge = score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low';
             
             let html = '<div class="metric-card">';
-            html += `<h3>🤖 AI Judge Evaluation <span class="score-badge ${badge}">Score: ${score}/10</span></h3>`;
+            html += `<h3>AI Judge Evaluation <span class="score-badge ${badge}">Score: ${score}/10</span></h3>`;
             
             if (evaluation.reasoning) {
                 html += `<p style="margin: 15px 0;"><strong>Reasoning:</strong> ${evaluation.reasoning}</p>`;
@@ -636,48 +636,54 @@
                 html += '</div>';
             }
             
-            // Cost Analysis
-            if (results.individual_results) {
-                const costsAvailable = results.individual_results.some(r => r.cost && !r.cost.error);
+            
+            // Cost Analysis - Display for ALL models
+            if (results.individual_results && results.individual_results.length > 0) {
+                html += '<h4 style="margin-top: 20px;">Cost Analysis</h4>';
+                html += '<table class="comparison-table"><thead><tr><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Input Cost</th><th>Output Cost</th><th>Total Cost</th></tr></thead><tbody>';
                 
-                if (costsAvailable) {
-                    html += '<h4 style="margin-top: 20px;">Cost Analysis</h4>';
-                    html += '<table class="comparison-table"><thead><tr><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Input Cost</th><th>Output Cost</th><th>Total Cost</th></tr></thead><tbody>';
+                let totalCostSum = 0;
+                let modelsWithCost = 0;
+                
+                results.individual_results.forEach(result => {
+                    html += '<tr>';
+                    html += `<td>${result.model_id}</td>`;
                     
-                    let totalCostSum = 0;
-                    results.individual_results.forEach(result => {
-                        if (result.cost && !result.cost.error) {
-                            const cost = result.cost;
-                            html += '<tr>';
-                            html += `<td>${result.model_id}</td>`;
-                            html += `<td>${cost.input_tokens || 0}</td>`;
-                            html += `<td>${cost.output_tokens || 0}</td>`;
-                            html += `<td>${cost.input_cost_usd || '$0.00000000'}</td>`;
-                            html += `<td>${cost.output_cost_usd || '$0.00000000'}</td>`;
-                            html += `<td><strong>${cost.total_cost_usd || '$0.00000000'}</strong></td>`;
-                            html += '</tr>';
-                            
-                            // Extract numeric value for sum
-                            const totalCostStr = cost.total_cost_usd || '$0.00000000';
-                            const totalCostNum = parseFloat(totalCostStr.replace('$', ''));
-                            totalCostSum += totalCostNum;
-                        }
-                    });
+                    if (result.cost && !result.cost.error) {
+                        const cost = result.cost;
+                        html += `<td>${cost.input_tokens || 0}</td>`;
+                        html += `<td>${cost.output_tokens || 0}</td>`;
+                        html += `<td>${cost.input_cost_usd || '$0.00000000'}</td>`;
+                        html += `<td>${cost.output_cost_usd || '$0.00000000'}</td>`;
+                        html += `<td><strong>${cost.total_cost_usd || '$0.00000000'}</strong></td>`;
+                        
+                        // Extract numeric value for sum
+                        const totalCostStr = cost.total_cost_usd || '$0.00000000';
+                        const totalCostNum = parseFloat(totalCostStr.replace('$', ''));
+                        totalCostSum += totalCostNum;
+                        modelsWithCost++;
+                    } else {
+                        // Display error or N/A for models without cost data
+                        const errorMsg = result.cost ? result.cost.error : 'No cost data';
+                        html += `<td colspan="5" style="color: #999; font-style: italic;">${errorMsg}</td>`;
+                    }
                     
-                    // Add total row
-                    //DEVELOPERNOTES: THIS IS NOT NEEDED AND IS OF NO VALUE
+                    html += '</tr>';
+                });
+                
+                // Add total row if we have any costs
+                //DEVELOPERNOTES: THIS IS OF NO VALUE AND HAS NO MEANING
+                //if (modelsWithCost > 0) {
                     //html += '<tr style="background: #f8f9fa; font-weight: bold;">';
-                    //html += '<td colspan="5" style="text-align: right;">Total Cost:</td>';
+                    //html += `<td colspan="5" style="text-align: right;">Total Cost (${modelsWithCost} model${modelsWithCost > 1 ? 's' : ''}):</td>`;
                     //html += `<td><strong>$${totalCostSum.toFixed(8)}</strong></td>`;
                     //html += '</tr>';
-                    
-                    html += '</tbody></table>';
-                }
+                //}
+                
+                html += '</tbody></table>';
             }
-            
-            // Rankings
             if (results.rankings) {
-                html += '<h4 style="margin-top: 20px;">Rankings</h4>';
+                html += '<h4 style="margin-top: 20px;">LLM As a Judge</h4>';
                 html += '<table class="comparison-table"><thead><tr><th>Metric</th><th>1st Place</th><th>2nd Place</th><th>3rd Place</th></tr></thead><tbody>';
                 
                 if (results.rankings.most_readable) {
