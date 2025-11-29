@@ -589,6 +589,11 @@
                         responseData.usage = importedResultsData[index].usage;
                     }
                     
+                    // Add latency data if available from imported results
+                    if (importedResultsData[index] && importedResultsData[index].latency_ms) {
+                        responseData.latency_ms = importedResultsData[index].latency_ms;
+                    }
+                    
                     responses.push(responseData);
                 }
             });
@@ -682,6 +687,46 @@
                 
                 html += '</tbody></table>';
             }
+            
+            // Latency Analysis - Display for models with latency data
+            const hasLatencyData = results.individual_results && results.individual_results.some(r => r.latency);
+            console.log('Checking for latency data:', hasLatencyData);
+            console.log('Individual results:', results.individual_results);
+            
+            if (hasLatencyData) {
+                html += '<h4 style="margin-top: 20px;">Latency Analysis</h4>';
+                html += '<table class="comparison-table"><thead><tr><th>Model</th><th>Server Latency (ms)</th><th>Input Tokens</th><th>Output Tokens</th><th>Tokens/Second</th></tr></thead><tbody>';
+                
+                results.individual_results.forEach(result => {
+                    if (result.latency) {
+                        const latency = result.latency;
+                        console.log(`Displaying latency for ${result.model_id}:`, latency);
+                        html += '<tr>';
+                        html += `<td>${result.model_id}</td>`;
+                        html += `<td><strong>${latency.server_latency_ms}</strong></td>`;
+                        html += `<td>${latency.input_tokens || 0}</td>`;
+                        html += `<td>${latency.output_tokens || 0}</td>`;
+                        html += `<td><strong>${latency.tokens_per_second}</strong></td>`;
+                        html += '</tr>';
+                    }
+                });
+                
+                // Add summary row if available
+                //DEVELOPERNOTES: THIS IS NOT NEEDED AND IS OF NO VALUE IN COMPARISON
+                //if (results.summary && results.summary.avg_latency_ms) {
+                    //html += '<tr style="background: #f8f9fa; font-weight: bold;">';
+                    //html += '<td>Average</td>';
+                    //html += `<td><strong>${results.summary.avg_latency_ms} ms</strong></td>`;
+                    //html += '<td colspan="2"></td>';
+                    //html += `<td><strong>${results.summary.avg_tokens_per_second}</strong></td>`;
+                    //html += '</tr>';
+                //}
+                
+                html += '</tbody></table>';
+            } else {
+                console.log('No latency data available to display');
+            }
+            
             if (results.rankings) {
                 html += '<h4 style="margin-top: 20px;">LLM As a Judge</h4>';
                 html += '<table class="comparison-table"><thead><tr><th>Metric</th><th>1st Place</th><th>2nd Place</th><th>3rd Place</th></tr></thead><tbody>';
@@ -705,6 +750,22 @@
                 if (results.rankings.longest_response) {
                     html += '<tr><td>Longest Response</td>';
                     results.rankings.longest_response.slice(0, 3).forEach(model => {
+                        html += `<td>${model}</td>`;
+                    });
+                    html += '</tr>';
+                }
+                
+                if (results.rankings.fastest_response) {
+                    html += '<tr><td>Fastest Response</td>';
+                    results.rankings.fastest_response.slice(0, 3).forEach(model => {
+                        html += `<td>${model}</td>`;
+                    });
+                    html += '</tr>';
+                }
+                
+                if (results.rankings.highest_throughput) {
+                    html += '<tr><td>Highest Throughput</td>';
+                    results.rankings.highest_throughput.slice(0, 3).forEach(model => {
                         html += `<td>${model}</td>`;
                     });
                     html += '</tr>';

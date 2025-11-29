@@ -169,6 +169,53 @@ class EvaluationService:
         self.bedrock_runtime = boto3.client('bedrock-runtime', region_name=region)
         self.cloudwatch = boto3.client('cloudwatch', region_name=region)
     
+    def measure_latency(self, model_id: str, prompt: str, max_tokens: int = 100) -> Dict:
+        """
+        Measure end-to-end latency for a model invocation.
+        
+        Args:
+            model_id: The model identifier
+            prompt: The prompt to send to the model
+            max_tokens: Maximum tokens to generate (default: 100)
+        
+        Returns:
+            Dictionary with latency metrics including server_latency_ms, tokens_per_second,
+            input/output tokens, and cost information
+        """
+        try:
+            response = self.bedrock_runtime.converse(
+                modelId=model_id,
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig={"maxTokens": max_tokens, "temperature": 0.1}
+            )
+            
+            latency_ms = response["metrics"]["latencyMs"]
+            input_tokens = response["usage"]["inputTokens"]
+            output_tokens = response["usage"]["outputTokens"]
+            
+            # Calculate tokens per second
+            tokens_per_second = round(output_tokens / (latency_ms / 1000), 1) if latency_ms > 0 else 0
+            
+            # Calculate cost
+            cost_info = calculate_model_cost(model_id, input_tokens, output_tokens)
+            
+            return {
+                "model_id": model_id,
+                "server_latency_ms": latency_ms,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "tokens_per_second": tokens_per_second,
+                **cost_info,
+                "error": False
+            }
+        
+        except Exception as e:
+            return {
+                "model_id": model_id,
+                "error": True,
+                "error_message": str(e)
+            }
+    
     def _evaluate_cost(self, model_id: str, input_tokens: int, output_tokens: int) -> Dict:
         """
         Calculate the cost of a model invocation and publish to CloudWatch.
@@ -488,20 +535,22 @@ Provide your evaluation in the following JSON format:
         Compare multiple model responses
         
         Args:
-            responses: List of dicts with 'model_id', 'response', and optional 'usage' keys
+            responses: List of dicts with 'model_id', 'response', and optional 'usage' and 'latency_ms' keys
             metrics: Metrics to use for comparison
         
         Returns:
-            Comparison results including cost analysis for all models
+            Comparison results including cost and latency analysis for all models
         """
         results = []
         total_cost = 0.0
         models_with_cost = 0
+        latency_data = []
         
         for resp in responses:
             model_id = resp.get('model_id', 'unknown')
             response_text = resp.get('response', '')
             usage = resp.get('usage', {})
+            latency_ms = resp.get('latency_ms')
             
             evaluation = self.evaluate_response(response_text, metrics=metrics)
             evaluation['model_id'] = model_id
@@ -520,6 +569,21 @@ Provide your evaluation in the following JSON format:
                     if 'error' not in cost_data and 'total_cost_raw' in cost_data:
                         total_cost += cost_data['total_cost_raw']
                         models_with_cost += 1
+                    
+                    # Add latency metrics if available
+                    if latency_ms is not None and latency_ms > 0:
+                        tokens_per_second = round(output_tokens / (latency_ms / 1000), 1) if latency_ms > 0 else 0
+                        evaluation['latency'] = {
+                            'server_latency_ms': latency_ms,
+                            'tokens_per_second': tokens_per_second,
+                            'input_tokens': input_tokens,
+                            'output_tokens': output_tokens
+                        }
+                        latency_data.append({
+                            'model_id': model_id,
+                            'latency_ms': latency_ms,
+                            'tokens_per_second': tokens_per_second
+                        })
                 else:
                     print(f"No token usage data for {model_id}: {usage}")
                     evaluation['cost'] = {"error": "No token usage data available"}
@@ -532,11 +596,29 @@ Provide your evaluation in the following JSON format:
         # Calculate rankings
         rankings = self._calculate_rankings(results)
         
-        # Generate summary with cost information
+        # Add latency rankings if we have latency data
+        if latency_data:
+            sorted_by_latency = sorted(latency_data, key=lambda x: x['latency_ms'])
+            rankings['fastest_response'] = [r['model_id'] for r in sorted_by_latency]
+            
+            sorted_by_throughput = sorted(latency_data, key=lambda x: x['tokens_per_second'], reverse=True)
+            rankings['highest_throughput'] = [r['model_id'] for r in sorted_by_throughput]
+        
+        # Generate summary with cost and latency information
         summary = self._generate_comparison_summary(results)
         if models_with_cost > 0:
             summary['total_cost'] = f"${total_cost:.8f}"
             summary['models_with_cost'] = models_with_cost
+        
+        if latency_data:
+            avg_latency = sum(d['latency_ms'] for d in latency_data) / len(latency_data)
+            avg_throughput = sum(d['tokens_per_second'] for d in latency_data) / len(latency_data)
+            summary['avg_latency_ms'] = round(avg_latency, 2)
+            summary['avg_tokens_per_second'] = round(avg_throughput, 1)
+            summary['latency_range'] = {
+                'min': min(d['latency_ms'] for d in latency_data),
+                'max': max(d['latency_ms'] for d in latency_data)
+            }
         
         return {
             'individual_results': results,

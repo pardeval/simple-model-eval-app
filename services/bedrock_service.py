@@ -1,5 +1,6 @@
 import boto3
 import json
+import time
 from typing import List, Dict, Any
 
 class BedrockService:
@@ -206,57 +207,93 @@ class BedrockService:
             
             response_body = json.loads(response['body'].read())
             
+            # Extract latency from response metadata if available
+            latency_ms = None
+            if 'ResponseMetadata' in response:
+                headers = response['ResponseMetadata'].get('HTTPHeaders', {})
+                # Bedrock returns latency in x-amzn-bedrock-invocation-latency header
+                latency_header = headers.get('x-amzn-bedrock-invocation-latency')
+                if latency_header:
+                    try:
+                        latency_ms = int(latency_header)
+                    except (ValueError, TypeError):
+                        pass
+            
             # Parse response based on model provider
             if 'anthropic' in model_id.lower() or 'claude' in model_id.lower():
-                return {
+                result = {
                     'text': response_body['content'][0]['text'],
                     'usage': response_body.get('usage', {})
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
             elif 'nova' in model_id.lower():
                 # Amazon Nova response format
                 output = response_body.get('output', {})
                 message = output.get('message', {})
                 content = message.get('content', [])
                 text = content[0].get('text', '') if content else ''
-                return {
+                result = {
                     'text': text,
                     'usage': response_body.get('usage', {})
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
             elif 'titan' in model_id.lower():
-                return {
+                result = {
                     'text': response_body['results'][0]['outputText'],
                     'usage': {'inputTokens': response_body.get('inputTextTokenCount', 0)}
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
             elif 'llama' in model_id.lower():
-                return {
+                result = {
                     'text': response_body.get('generation', ''),
                     'usage': response_body.get('prompt_token_count', {})
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
             elif 'cohere' in model_id.lower():
-                return {
+                result = {
                     'text': response_body.get('generations', [{}])[0].get('text', ''),
                     'usage': {}
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
             elif 'ai21' in model_id.lower():
-                return {
+                result = {
                     'text': response_body.get('completions', [{}])[0].get('data', {}).get('text', ''),
                     'usage': {}
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
             elif 'mistral' in model_id.lower():
-                return {
+                result = {
                     'text': response_body.get('outputs', [{}])[0].get('text', ''),
                     'usage': {}
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
             else:
                 # Generic fallback - try common response fields
                 text = (response_body.get('completion') or 
                        response_body.get('text') or 
                        response_body.get('generated_text') or
                        str(response_body))
-                return {
+                result = {
                     'text': text,
                     'usage': {}
                 }
+                if latency_ms is not None:
+                    result['latency_ms'] = latency_ms
+                return result
         except Exception as e:
             return {'error': str(e)}
     
@@ -278,12 +315,16 @@ class BedrockService:
         results = []
         for model_id in model_ids:
             result = self.invoke_model(model_id, prompt_text)
-            results.append({
+            result_dict = {
                 'model_id': model_id,
                 'response': result.get('text', ''),
                 'error': result.get('error'),
                 'usage': result.get('usage', {})
-            })
+            }
+            # Include latency if available
+            if 'latency_ms' in result:
+                result_dict['latency_ms'] = result['latency_ms']
+            results.append(result_dict)
         
         return results
     
